@@ -10,11 +10,11 @@
   <DefaultLocale>en-US</DefaultLocale>
   <DisplayName DefaultValue="SuppRef"/>
   <Description DefaultValue="Auto-numbered supplementary figure citations for Word manuscripts."/>
-  <IconUrl DefaultValue="{{BASE_URL}}assets/icon-32.png"/>
-  <HighResolutionIconUrl DefaultValue="{{BASE_URL}}assets/icon-64.png"/>
-  <SupportUrl DefaultValue="{{BASE_URL}}"/>
+  <IconUrl DefaultValue="https://jsgounot.github.io/word_figs_plugin/assets/icon-32.png"/>
+  <HighResolutionIconUrl DefaultValue="https://jsgounot.github.io/word_figs_plugin/assets/icon-64.png"/>
+  <SupportUrl DefaultValue="https://jsgounot.github.io/word_figs_plugin/"/>
   <AppDomains>
-    <AppDomain>{{BASE_URL}}</AppDomain>
+    <AppDomain>https://jsgounot.github.io/word_figs_plugin/</AppDomain>
   </AppDomains>
   <Hosts>
     <Host Name="Document"/>
@@ -25,7 +25,7 @@
     </Sets>
   </Requirements>
   <DefaultSettings>
-    <SourceLocation DefaultValue="{{BASE_URL}}taskpane.html"/>
+    <SourceLocation DefaultValue="https://jsgounot.github.io/word_figs_plugin/taskpane.html"/>
   </DefaultSettings>
   <Permissions>ReadWriteDocument</Permissions>
 
@@ -67,13 +67,13 @@
     </Hosts>
     <Resources>
       <bt:Images>
-        <bt:Image id="Icon.16" DefaultValue="{{BASE_URL}}assets/icon-16.png"/>
-        <bt:Image id="Icon.32" DefaultValue="{{BASE_URL}}assets/icon-32.png"/>
-        <bt:Image id="Icon.80" DefaultValue="{{BASE_URL}}assets/icon-80.png"/>
+        <bt:Image id="Icon.16" DefaultValue="https://jsgounot.github.io/word_figs_plugin/assets/icon-16.png"/>
+        <bt:Image id="Icon.32" DefaultValue="https://jsgounot.github.io/word_figs_plugin/assets/icon-32.png"/>
+        <bt:Image id="Icon.80" DefaultValue="https://jsgounot.github.io/word_figs_plugin/assets/icon-80.png"/>
       </bt:Images>
       <bt:Urls>
-        <bt:Url id="Commands.Url" DefaultValue="{{BASE_URL}}commands.html"/>
-        <bt:Url id="Taskpane.Url" DefaultValue="{{BASE_URL}}taskpane.html"/>
+        <bt:Url id="Commands.Url" DefaultValue="https://jsgounot.github.io/word_figs_plugin/commands.html"/>
+        <bt:Url id="Taskpane.Url" DefaultValue="https://jsgounot.github.io/word_figs_plugin/taskpane.html"/>
       </bt:Urls>
       <bt:ShortStrings>
         <bt:String id="Group.Label" DefaultValue="SuppRef"/>

@@ -1,18 +1,24 @@
 /*
  * SuppRef core — pure logic, no Office.js dependency.
- * Rendering (§8), tag format (§5.3–5.5), numbering (§6), validation (§5.2, §7).
+ * Rendering (§8), tag format (§5.3–5.5), numbering (§6), validation (§5.2, §7),
+ * and series: independent counters (main / supplementary / tables / custom).
  * Loaded by taskpane.html via <script>; also loadable by the test runner (tests/run.sh).
  * ES2017 only: no optional chaining, no nullish coalescing, no object spread.
+ *
+ * Every function that takes a "config"/"fmt" argument expects a series FORMAT
+ * (prefix, number and panel styles…), not the document-wide settings.
  */
 (function (root) {
   'use strict';
 
-  var SCHEMA = 1;
+  var TAG_SCHEMA = 1;     // version inside content-control tags (unchanged by series)
+  var SCHEMA = 2;         // version of the registry stored in document settings
   var SETTINGS_KEY = 'suppref';
   var TAG_PREFIX = 'suppref|';
   var MAX_LETTER_PANELS = 26;
 
-  var DEFAULT_CONFIG = Object.freeze({
+  /** Per-series formatting and numbering. */
+  var DEFAULT_FORMAT = Object.freeze({
     prefix: 'Supplementary Figure ',
     legendPrefix: 'Supplementary Figure ',
     legendSuffix: '.',
@@ -24,12 +30,29 @@
     panelRangeSeparator: '–',
     panelListSeparator: ',',
     panelRangeMinRun: 3,
-    orderMode: 'firstCitation',
+    orderMode: 'firstCitation'
+  });
+
+  /** Document-wide behaviour. */
+  var DEFAULT_GLOBAL = Object.freeze({
     appearance: 'BoundingBox',
     autoRefreshOnInsert: true,
     suspendTrackChanges: true,
     warnUnresolved: true
   });
+
+  /**
+   * Series offered in new documents. "fig" is the supplementary series: it keeps the
+   * id used by schema-1 documents, so their figures land there on migration.
+   */
+  var DEFAULT_SERIES = [
+    { id: 'main', name: 'Main figures', placeholder: 'MainFig', format: { prefix: 'Figure ', legendPrefix: 'Figure ' } },
+    { id: 'fig', name: 'Supplementary figures', placeholder: 'Figure', format: {} },
+    { id: 'ext', name: 'Additional figures', placeholder: 'ExtFig',
+      format: { prefix: 'Extended Data Figure ', legendPrefix: 'Extended Data Figure ' } },
+    { id: 'table', name: 'Supplementary tables', placeholder: 'SuppTable',
+      format: { prefix: 'Supplementary Table ', legendPrefix: 'Supplementary Table ' } }
+  ];
 
   var ENUMS = {
     numberStyle: ['arabic', 'roman-upper', 'roman-lower'],
@@ -246,11 +269,11 @@
   }
 
   function buildCitationTag(figId, panels, flags) {
-    return ['suppref', SCHEMA, 'c', figId, formatPanelsField(panels), flags || ''].join('|');
+    return ['suppref', TAG_SCHEMA, 'c', figId, formatPanelsField(panels), flags || ''].join('|');
   }
 
   function buildLegendTag(figId) {
-    return ['suppref', SCHEMA, 'l', figId].join('|');
+    return ['suppref', TAG_SCHEMA, 'l', figId].join('|');
   }
 
   var ID_RE = /^[0-9a-z]{1,32}$/;
@@ -262,7 +285,7 @@
   function parseTag(tag) {
     if (typeof tag !== 'string' || tag.indexOf(TAG_PREFIX) !== 0) return null;
     var parts = tag.split('|');
-    if (parts[1] !== String(SCHEMA)) return { error: 'Unsupported schema version "' + parts[1] + '"' };
+    if (parts[1] !== String(TAG_SCHEMA)) return { error: 'Unsupported schema version "' + parts[1] + '"' };
     var kind = parts[2];
     if (kind === 'c') {
       if (parts.length !== 6) return { error: 'Malformed citation tag' };
@@ -280,6 +303,7 @@
     return { error: 'Unknown control kind "' + kind + '"' };
   }
 
+
   // --------------------------------------------------------------- registry
 
   function genId(existingIds, rand) {
@@ -294,7 +318,7 @@
     throw new Error('Could not generate a unique id');
   }
 
-  /** Returns an error string, or null if valid. */
+  /** Figure labels are unique across all series. Returns an error string, or null if valid. */
   function validateLabel(label, figures, excludeId) {
     if (typeof label !== 'string' || !label.length) return 'Label is required';
     if (label.length > 30) return 'Label must be at most 30 characters';
@@ -309,60 +333,6 @@
   function validateDescription(d) {
     if (d && String(d).length > 200) return 'Description must be at most 200 characters';
     return null;
-  }
-
-  function newRegistry(config) {
-    return {
-      schema: SCHEMA,
-      figures: [],
-      config: mergeConfig(config),
-      lastRefresh: { at: null, numbers: {}, counts: {} }
-    };
-  }
-
-  function mergeConfig(cfg) {
-    var out = Object.assign({}, DEFAULT_CONFIG);
-    if (cfg && typeof cfg === 'object') {
-      Object.keys(DEFAULT_CONFIG).forEach(function (k) {
-        if (cfg[k] !== undefined && typeof cfg[k] === typeof DEFAULT_CONFIG[k]) out[k] = cfg[k];
-      });
-    }
-    if (validateConfig(out).length) {
-      // Fall back key by key for anything invalid.
-      validateConfig(out).forEach(function (e) { out[e.key] = DEFAULT_CONFIG[e.key]; });
-    }
-    // The default panelStart ('A') is only valid for letter styles.
-    if (validateConfig(out).length) out.panelStart = convertPanelStart(out.panelStart, out.panelStyle);
-    return out;
-  }
-
-  /** Coerce whatever is stored in settings into a well-formed registry. */
-  function normalizeRegistry(raw, defaultConfig) {
-    if (typeof raw === 'string') {
-      try { raw = JSON.parse(raw); } catch (e) { raw = null; }
-    }
-    if (!raw || typeof raw !== 'object') return newRegistry(defaultConfig);
-    var reg = newRegistry(raw.config || defaultConfig);
-    var seenIds = {};
-    (Array.isArray(raw.figures) ? raw.figures : []).forEach(function (f, i) {
-      if (!f || typeof f.id !== 'string' || !ID_RE.test(f.id) || seenIds[f.id]) return;
-      seenIds[f.id] = true;
-      reg.figures.push({
-        id: f.id,
-        seq: f.seq || 'fig',
-        label: typeof f.label === 'string' && f.label ? f.label : 'fig-' + f.id,
-        description: typeof f.description === 'string' ? f.description : '',
-        manualOrder: typeof f.manualOrder === 'number' ? f.manualOrder : i
-      });
-    });
-    if (raw.lastRefresh && typeof raw.lastRefresh === 'object') {
-      reg.lastRefresh = {
-        at: raw.lastRefresh.at || null,
-        numbers: raw.lastRefresh.numbers || {},
-        counts: raw.lastRefresh.counts || {}
-      };
-    }
-    return reg;
   }
 
   function nextManualOrder(figures) {
@@ -380,35 +350,81 @@
     return figures.slice().sort(function (a, b) { return a.manualOrder - b.manualOrder; });
   }
 
+  // ----------------------------------------------------------------- series
+
+  function seriesById(registry, id) {
+    for (var i = 0; i < registry.series.length; i++) if (registry.series[i].id === id) return registry.series[i];
+    return null;
+  }
+
+  /** Series used for orphans and as the fallback: supplementary ("fig") if present, else the first. */
+  function defaultSeries(registry) {
+    return seriesById(registry, 'fig') || registry.series[0];
+  }
+
+  /** Format of the series a figure belongs to (fallback series for unknown figures). */
+  function formatOf(registry, figId) {
+    var f = figureById(registry, figId);
+    var s = f ? seriesById(registry, f.seq) : null;
+    return (s || defaultSeries(registry)).format;
+  }
+
+  function makeSeries(id, name, placeholder, format) {
+    return { id: id, name: name, placeholder: placeholder, format: mergeFormat(format) };
+  }
+
+  function defaultSeriesList() {
+    return DEFAULT_SERIES.map(function (s) {
+      return makeSeries(s.id, s.name, s.placeholder, Object.assign({}, DEFAULT_FORMAT, s.format));
+    });
+  }
+
+  /** Name, and placeholder token for "Import placeholders". Returns [{ key, message }]. */
+  function validateSeriesMeta(series, allSeries) {
+    var errs = [];
+    var name = typeof series.name === 'string' ? series.name.trim() : '';
+    if (!name) errs.push({ key: 'name', message: 'Name is required' });
+    else if (name.length > 40) errs.push({ key: 'name', message: 'Name must be at most 40 characters' });
+    var ph = typeof series.placeholder === 'string' ? series.placeholder : '';
+    if (ph && !/^[A-Za-z][A-Za-z0-9]{0,19}$/.test(ph)) {
+      errs.push({ key: 'placeholder', message: 'Placeholder word: a letter then letters/digits, up to 20 (or empty)' });
+    }
+    (allSeries || []).forEach(function (o) {
+      if (o.id === series.id) return;
+      if (name && o.name.trim().toLowerCase() === name.toLowerCase()) errs.push({ key: 'name', message: 'Another series is called "' + name + '"' });
+      if (ph && o.placeholder && o.placeholder.toLowerCase() === ph.toLowerCase()) {
+        errs.push({ key: 'placeholder', message: 'Placeholder word "' + ph + '" is used by ' + o.name });
+      }
+    });
+    return errs;
+  }
+
   // ----------------------------------------------------------------- config
 
   function isInt(v) { return typeof v === 'number' && isFinite(v) && v === Math.floor(v); }
 
   /**
-   * §7 validation. maxUsedPanel (optional) is the highest panel index used by any
-   * citation in the document, so a panelStart that would push it past Z is rejected.
+   * §7 validation of a series format. maxUsedPanel (optional) is the highest panel index
+   * used by any citation of this series, so a panelStart that would push it past Z is rejected.
    * Returns [{ key, message }].
    */
-  function validateConfig(cfg, maxUsedPanel) {
+  function validateFormat(fmt, maxUsedPanel) {
     var errs = [];
     var err = function (key, message) { errs.push({ key: key, message: message }); };
     ['prefix', 'legendPrefix', 'legendSuffix', 'numberPanelSeparator', 'panelRangeSeparator', 'panelListSeparator'].forEach(function (k) {
-      if (typeof cfg[k] !== 'string') err(k, 'Must be text');
+      if (typeof fmt[k] !== 'string') err(k, 'Must be text');
     });
-    if (!isInt(cfg.numberStart) || cfg.numberStart < 0) err('numberStart', 'Must be a whole number ≥ 0');
-    if (!isInt(cfg.panelRangeMinRun) || cfg.panelRangeMinRun < 2) err('panelRangeMinRun', 'Must be a whole number ≥ 2');
-    Object.keys(ENUMS).forEach(function (k) {
-      if (ENUMS[k].indexOf(cfg[k]) < 0) err(k, 'Invalid value');
+    if (!isInt(fmt.numberStart) || fmt.numberStart < 0) err('numberStart', 'Must be a whole number ≥ 0');
+    if (!isInt(fmt.panelRangeMinRun) || fmt.panelRangeMinRun < 2) err('panelRangeMinRun', 'Must be a whole number ≥ 2');
+    ['numberStyle', 'panelStyle', 'orderMode'].forEach(function (k) {
+      if (ENUMS[k].indexOf(fmt[k]) < 0) err(k, 'Invalid value');
     });
-    ['autoRefreshOnInsert', 'suspendTrackChanges', 'warnUnresolved'].forEach(function (k) {
-      if (typeof cfg[k] !== 'boolean') err(k, 'Must be on or off');
-    });
-    if (ENUMS.panelStyle.indexOf(cfg.panelStyle) >= 0) {
-      var ps = String(cfg.panelStart);
-      if (isLetterStyle(cfg.panelStyle)) {
+    if (ENUMS.panelStyle.indexOf(fmt.panelStyle) >= 0) {
+      var ps = String(fmt.panelStart);
+      if (isLetterStyle(fmt.panelStyle)) {
         if (!/^[A-Za-z]$/.test(ps)) err('panelStart', 'Must be a single letter A–Z');
-        else if (maxUsedPanel && maxUsedPanel > maxPanels(cfg)) {
-          err('panelStart', 'Starting at ' + ps.toUpperCase() + ' leaves ' + maxPanels(cfg) +
+        else if (maxUsedPanel && maxUsedPanel > maxPanels(fmt)) {
+          err('panelStart', 'Starting at ' + ps.toUpperCase() + ' leaves ' + maxPanels(fmt) +
             ' panels, but the document uses up to ' + maxUsedPanel);
         }
       } else if (!/^\d+$/.test(ps) || parseInt(ps, 10) < 1) {
@@ -417,6 +433,36 @@
     }
     return errs;
   }
+
+  function validateGlobal(cfg) {
+    var errs = [];
+    if (ENUMS.appearance.indexOf(cfg.appearance) < 0) errs.push({ key: 'appearance', message: 'Invalid value' });
+    ['autoRefreshOnInsert', 'suspendTrackChanges', 'warnUnresolved'].forEach(function (k) {
+      if (typeof cfg[k] !== 'boolean') errs.push({ key: k, message: 'Must be on or off' });
+    });
+    return errs;
+  }
+
+  /** Take known keys of the right type from src over defaults, then reset invalid ones. */
+  function mergeKeys(defaults, src, validate) {
+    var out = Object.assign({}, defaults);
+    if (src && typeof src === 'object') {
+      Object.keys(defaults).forEach(function (k) {
+        if (src[k] !== undefined && typeof src[k] === typeof defaults[k]) out[k] = src[k];
+      });
+    }
+    validate(out).forEach(function (e) { out[e.key] = defaults[e.key]; });
+    return out;
+  }
+
+  function mergeFormat(fmt) {
+    var out = mergeKeys(DEFAULT_FORMAT, fmt, validateFormat);
+    // The default panelStart ('A') is only valid for letter styles.
+    if (validateFormat(out).length) out.panelStart = convertPanelStart(out.panelStart, out.panelStyle);
+    return out;
+  }
+
+  function mergeGlobal(cfg) { return mergeKeys(DEFAULT_GLOBAL, cfg, validateGlobal); }
 
   /** Convert panelStart when the panel style switches between letter and numeric styles. */
   function convertPanelStart(value, newStyle) {
@@ -430,15 +476,90 @@
     return /^\d+$/.test(s) && parseInt(s, 10) >= 1 ? s : '1';
   }
 
+  /** Normalize a stored series list; falls back to the defaults when empty or invalid. */
+  function normalizeSeriesList(list) {
+    var out = [], seen = {};
+    (Array.isArray(list) ? list : []).forEach(function (s) {
+      if (!s || typeof s.id !== 'string' || !ID_RE.test(s.id) || seen[s.id]) return;
+      seen[s.id] = true;
+      var name = typeof s.name === 'string' && s.name.trim() ? s.name.trim().slice(0, 40) : 'Series ' + s.id;
+      var ph = typeof s.placeholder === 'string' && /^[A-Za-z][A-Za-z0-9]{0,19}$/.test(s.placeholder) ? s.placeholder : '';
+      out.push(makeSeries(s.id, name, ph, s.format));
+    });
+    return out.length ? out : defaultSeriesList();
+  }
+
+  /**
+   * "Save as my defaults" stores { series, config }. Defaults saved by v1 were a flat config;
+   * those become the supplementary format plus global settings.
+   */
+  function seriesAndConfigFrom(src) {
+    if (src && Array.isArray(src.series)) {
+      return { series: normalizeSeriesList(src.series), config: mergeGlobal(src.config) };
+    }
+    var series = defaultSeriesList();
+    if (src && typeof src === 'object') {
+      var supp = series.filter(function (s) { return s.id === 'fig'; })[0];
+      supp.format = mergeFormat(Object.assign({}, supp.format, src));
+    }
+    return { series: series, config: mergeGlobal(src) };
+  }
+
+  function newRegistry(defaults) {
+    var sc = seriesAndConfigFrom(defaults);
+    return {
+      schema: SCHEMA,
+      series: sc.series,
+      figures: [],
+      config: sc.config,
+      lastRefresh: { at: null, numbers: {}, counts: {} }
+    };
+  }
+
+  /**
+   * Coerce whatever is stored in settings into a well-formed registry.
+   * Schema 1 (no series): its config becomes the supplementary format, and its
+   * figures (seq "fig") stay supplementary figures.
+   */
+  function normalizeRegistry(raw, defaults) {
+    if (typeof raw === 'string') {
+      try { raw = JSON.parse(raw); } catch (e) { raw = null; }
+    }
+    if (!raw || typeof raw !== 'object') return newRegistry(defaults);
+    var reg = newRegistry(Array.isArray(raw.series) ? { series: raw.series, config: raw.config } : (raw.config || {}));
+    var seqs = {};
+    reg.series.forEach(function (s) { seqs[s.id] = true; });
+    var fallback = defaultSeries(reg).id;
+    var seenIds = {};
+    (Array.isArray(raw.figures) ? raw.figures : []).forEach(function (f, i) {
+      if (!f || typeof f.id !== 'string' || !ID_RE.test(f.id) || seenIds[f.id]) return;
+      seenIds[f.id] = true;
+      reg.figures.push({
+        id: f.id,
+        seq: seqs[f.seq] ? f.seq : fallback,
+        label: typeof f.label === 'string' && f.label ? f.label : 'fig-' + f.id,
+        description: typeof f.description === 'string' ? f.description : '',
+        manualOrder: typeof f.manualOrder === 'number' ? f.manualOrder : i
+      });
+    });
+    if (raw.lastRefresh && typeof raw.lastRefresh === 'object') {
+      reg.lastRefresh = {
+        at: raw.lastRefresh.at || null,
+        numbers: raw.lastRefresh.numbers || {},
+        counts: raw.lastRefresh.counts || {}
+      };
+    }
+    return reg;
+  }
+
   // -------------------------------------------------------------- numbering
 
   /**
-   * §6. items: parsed controls in document order, each
+   * §6, once per series. items: parsed controls in document order, each
    *   { kind: 'c'|'l', figId, panels, flags, ref }  (ref is opaque, e.g. the control id).
-   * Returns { numbers: {figId: n}, counts: {figId: n}, warnings: [{ type, message, ref? }] }.
+   * Returns { numbers: {figId: n}, counts: {figId: n}, warnings: [{ type, message, figId?, ref? }] }.
    */
   function computeNumbering(registry, items) {
-    var cfg = registry.config;
     var known = {};
     registry.figures.forEach(function (f) { known[f.id] = f; });
     var numbers = {}, counts = {}, warnings = [];
@@ -450,21 +571,28 @@
       if (!(it.figId in firstCiteRef)) { firstCiteRef[it.figId] = it.ref; firstCiteOrder.push(it.figId); }
     });
 
-    var next = cfg.numberStart;
-    if (cfg.orderMode === 'manual') {
-      byManualOrder(registry.figures).forEach(function (f) { numbers[f.id] = next++; });
-    } else {
-      firstCiteOrder.forEach(function (id) { numbers[id] = next++; });
-      registry.figures.forEach(function (f) { if (!(f.id in numbers)) numbers[f.id] = next++; });
-    }
+    registry.series.forEach(function (s) {
+      var next = s.format.numberStart;
+      var figs = registry.figures.filter(function (f) { return f.seq === s.id; });
+      if (s.format.orderMode === 'manual') {
+        byManualOrder(figs).forEach(function (f) { numbers[f.id] = next++; });
+      } else {
+        firstCiteOrder.forEach(function (id) { if (known[id].seq === s.id) numbers[id] = next++; });
+        figs.forEach(function (f) { if (!(f.id in numbers)) numbers[f.id] = next++; });
+      }
+    });
 
-    var fmt = function (id) { return formatNumber(numbers[id], cfg.numberStyle); };
+    /** "Supplementary Figure 3" — how warnings name a figure. */
+    var name = function (id) {
+      var fmt = formatOf(registry, id);
+      return (fmt.prefix + formatNumber(numbers[id], fmt.numberStyle)).trim();
+    };
     var label = function (id) { return known[id] ? known[id].label : id; };
+    var seqOf = function (id) { return known[id].seq; };
 
-    if (cfg.warnUnresolved) {
-      var uncited = registry.figures.filter(function (f) { return !counts[f.id]; });
-      uncited.forEach(function (f) {
-        warnings.push({ type: 'uncited', figId: f.id, message: 'Uncited: ' + f.label + ' (Fig. ' + fmt(f.id) + ')' });
+    if (registry.config.warnUnresolved) {
+      registry.figures.forEach(function (f) {
+        if (!counts[f.id]) warnings.push({ type: 'uncited', figId: f.id, message: 'Uncited: ' + f.label + ' (' + name(f.id) + ')' });
       });
 
       var orphanSeen = {};
@@ -475,28 +603,31 @@
           message: 'Orphan ' + (it.kind === 'l' ? 'legend' : 'citation') + ': figure id "' + it.figId + '" is not registered' });
       });
 
-      if (cfg.orderMode === 'manual') {
-        var maxSoFar = null;
-        firstCiteOrder.forEach(function (id) {
-          if (maxSoFar !== null && numbers[id] < numbers[maxSoFar]) {
-            warnings.push({ type: 'order', figId: id, ref: firstCiteRef[id],
-              message: 'Fig. ' + fmt(maxSoFar) + ' is cited before Fig. ' + fmt(id) });
-          }
-          if (maxSoFar === null || numbers[id] > numbers[maxSoFar]) maxSoFar = id;
-        });
-      }
+      // Manual mode: citation order that disagrees with the chosen order (per series).
+      var maxSoFar = {};
+      firstCiteOrder.forEach(function (id) {
+        var s = seriesById(registry, seqOf(id));
+        if (!s || s.format.orderMode !== 'manual') return;
+        var prev = maxSoFar[s.id];
+        if (prev && numbers[id] < numbers[prev]) {
+          warnings.push({ type: 'order', figId: id, ref: firstCiteRef[id],
+            message: name(prev) + ' is cited before ' + name(id) });
+        }
+        if (!prev || numbers[id] > numbers[prev]) maxSoFar[s.id] = id;
+      });
 
-      var legendRefs = {}, prevLegend = null, orderWarned = {};
+      // Legend labels: ascending within each series; at most one per figure.
+      var legendRefs = {}, prevLegend = {}, orderWarned = {};
       items.forEach(function (it) {
         if (it.kind !== 'l' || !known[it.figId]) return;
         (legendRefs[it.figId] = legendRefs[it.figId] || []).push(it.ref);
-        if (prevLegend && numbers[it.figId] < numbers[prevLegend.figId] &&
-            !orderWarned[prevLegend.figId + '>' + it.figId]) {
-          orderWarned[prevLegend.figId + '>' + it.figId] = true;
-          warnings.push({ type: 'legendOrder', figId: prevLegend.figId, ref: prevLegend.ref,
-            message: 'Legend for Fig. ' + fmt(prevLegend.figId) + ' appears before Fig. ' + fmt(it.figId) });
+        var seq = seqOf(it.figId), prev = prevLegend[seq];
+        if (prev && numbers[it.figId] < numbers[prev.figId] && !orderWarned[prev.figId + '>' + it.figId]) {
+          orderWarned[prev.figId + '>' + it.figId] = true;
+          warnings.push({ type: 'legendOrder', figId: prev.figId, ref: prev.ref,
+            message: 'Legend for ' + name(prev.figId) + ' appears before ' + name(it.figId) });
         }
-        if (!prevLegend || numbers[it.figId] > numbers[prevLegend.figId]) prevLegend = it;
+        if (!prev || numbers[it.figId] > numbers[prev.figId]) prevLegend[seq] = it;
       });
       Object.keys(legendRefs).forEach(function (id) {
         if (legendRefs[id].length > 1) {
@@ -509,7 +640,7 @@
     var overflowWarned = {};
     items.forEach(function (it) {
       if (it.kind !== 'c' || !known[it.figId] || overflowWarned[it.figId]) return;
-      if (renderPanels(it.panels, cfg).overflow.length) {
+      if (renderPanels(it.panels, formatOf(registry, it.figId)).overflow.length) {
         overflowWarned[it.figId] = true;
         warnings.push({ type: 'panelOverflow', figId: it.figId, ref: it.ref,
           message: 'Panel beyond Z in a citation of ' + label(it.figId) + ' (rendered as "?")' });
@@ -521,11 +652,11 @@
 
   /** Target text for one parsed control given computed numbers. */
   function targetText(item, registry, numbers) {
-    var cfg = registry.config;
     var known = !!figureById(registry, item.figId);
-    if (item.kind === 'l') return renderLegend(known ? numbers[item.figId] : null, cfg);
-    if (!known) return renderOrphan(item.flags, cfg);
-    return renderCitation(numbers[item.figId], item.panels, item.flags, cfg);
+    var fmt = formatOf(registry, item.figId);
+    if (item.kind === 'l') return renderLegend(known ? numbers[item.figId] : null, fmt);
+    if (!known) return renderOrphan(item.flags, fmt);
+    return renderCitation(numbers[item.figId], item.panels, item.flags, fmt);
   }
 
   function citationTitle(label) { return 'SuppRef: ' + label; }
@@ -533,18 +664,42 @@
 
   // ------------------------------------------------------------ placeholders
 
-  /** §9.9. "Figure_droso_A" → { label: 'droso', panel: 1 }; "Figure_qpcr" → { label: 'qpcr', panel: null }. */
-  function parsePlaceholder(text) {
-    var m = /^Figure_([A-Za-z0-9]+)(?:_([A-Z]))?$/.exec(String(text).trim());
+  /**
+   * §9.9, one pair of Word wildcard patterns per series with a placeholder word.
+   * "<" anchors the word start so "Figure_x" isn't found inside "MainFigure_x".
+   */
+  function placeholderPatterns(seriesList) {
+    var out = [];
+    seriesList.forEach(function (s) {
+      if (!s.placeholder) return;
+      out.push({ seq: s.id, withPanel: true, pattern: '<' + s.placeholder + '_[A-Za-z0-9]@_[A-Z]>' });
+      out.push({ seq: s.id, withPanel: false, pattern: '<' + s.placeholder + '_[A-Za-z0-9]@>' });
+    });
+    return out;
+  }
+
+  /**
+   * "Figure_droso_A" → { seq: 'fig', label: 'droso', panel: 1 };
+   * "MainFig_qpcr" → { seq: 'main', label: 'qpcr', panel: null }. Placeholder words are case-sensitive.
+   */
+  function parsePlaceholder(text, seriesList) {
+    var m = /^([A-Za-z][A-Za-z0-9]*)_([A-Za-z0-9]+)(?:_([A-Z]))?$/.exec(String(text).trim());
     if (!m) return null;
-    return { label: m[1], panel: m[2] ? m[2].charCodeAt(0) - 64 : null };
+    for (var i = 0; i < seriesList.length; i++) {
+      if (seriesList[i].placeholder && seriesList[i].placeholder === m[1]) {
+        return { seq: seriesList[i].id, label: m[2], panel: m[3] ? m[3].charCodeAt(0) - 64 : null };
+      }
+    }
+    return null;
   }
 
   var api = {
     SCHEMA: SCHEMA,
+    TAG_SCHEMA: TAG_SCHEMA,
     SETTINGS_KEY: SETTINGS_KEY,
     TAG_PREFIX: TAG_PREFIX,
-    DEFAULT_CONFIG: DEFAULT_CONFIG,
+    DEFAULT_FORMAT: DEFAULT_FORMAT,
+    DEFAULT_GLOBAL: DEFAULT_GLOBAL,
     ENUMS: ENUMS,
     toRoman: toRoman,
     fromRoman: fromRoman,
@@ -569,18 +724,28 @@
     genId: genId,
     validateLabel: validateLabel,
     validateDescription: validateDescription,
-    newRegistry: newRegistry,
-    mergeConfig: mergeConfig,
-    normalizeRegistry: normalizeRegistry,
     nextManualOrder: nextManualOrder,
     figureById: figureById,
     byManualOrder: byManualOrder,
-    validateConfig: validateConfig,
+    seriesById: seriesById,
+    defaultSeries: defaultSeries,
+    formatOf: formatOf,
+    makeSeries: makeSeries,
+    defaultSeriesList: defaultSeriesList,
+    validateSeriesMeta: validateSeriesMeta,
+    validateFormat: validateFormat,
+    validateGlobal: validateGlobal,
+    mergeFormat: mergeFormat,
+    mergeGlobal: mergeGlobal,
     convertPanelStart: convertPanelStart,
+    normalizeSeriesList: normalizeSeriesList,
+    newRegistry: newRegistry,
+    normalizeRegistry: normalizeRegistry,
     computeNumbering: computeNumbering,
     targetText: targetText,
     citationTitle: citationTitle,
     legendTitle: legendTitle,
+    placeholderPatterns: placeholderPatterns,
     parsePlaceholder: parsePlaceholder
   };
 

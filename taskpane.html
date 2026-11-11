@@ -36,6 +36,7 @@
       <ul id="figList" class="figlist"></ul>
       <p id="figEmpty" class="hint">No figures yet. Add one below, or import placeholders.</p>
       <form id="addForm" class="addform" autocomplete="off">
+        <select id="addSeries" title="Series"></select>
         <input id="addLabel" placeholder="Label (e.g. droso)" maxlength="30" required>
         <input id="addDesc" placeholder="Description (optional)" maxlength="200">
         <button type="submit">Add figure</button>
@@ -68,8 +69,18 @@
   <main id="settingsView" hidden>
     <section>
       <h2>Settings</h2>
-      <div class="preview" id="cfgPreview"></div>
       <form id="cfgForm" class="cfg" autocomplete="off">
+        <h3>Series</h3>
+        <p class="hint">Each series (main figures, supplementary figures, tables…) is numbered independently.</p>
+        <div class="row">
+          <select id="cfgSeries" title="Series to edit"></select>
+          <button type="button" id="cfgAddSeries" title="Add a series">Add</button>
+          <button type="button" id="cfgDelSeries" class="danger" title="Delete this series">Delete</button>
+        </div>
+        <label>Series name <input data-scope="series" data-key="name" maxlength="40"></label>
+        <label>Placeholder word <input data-scope="series" data-key="placeholder" maxlength="20" placeholder="e.g. Figure → Figure_label_A"></label>
+        <div class="preview" id="cfgPreview"></div>
+
         <h3>Citations</h3>
         <label>Prefix <input data-key="prefix"></label>
         <label>Number style
@@ -101,22 +112,24 @@
         <label>Legend prefix <input data-key="legendPrefix"></label>
         <label>Legend suffix <input data-key="legendSuffix"></label>
 
-        <h3>Behaviour</h3>
-        <label>Numbering
+        <h3>Numbering</h3>
+        <label>Order
           <select data-key="orderMode">
             <option value="firstCitation">By first citation</option>
             <option value="manual">Manual order</option>
           </select>
         </label>
+
+        <h3>All series</h3>
         <label>Control appearance
-          <select data-key="appearance">
+          <select data-scope="global" data-key="appearance">
             <option value="BoundingBox">Bounding box</option>
             <option value="Hidden">Hidden</option>
           </select>
         </label>
-        <label class="check"><input type="checkbox" data-key="autoRefreshOnInsert"> Refresh after each insert or edit</label>
-        <label class="check"><input type="checkbox" data-key="suspendTrackChanges"> Suspend Track Changes during refresh</label>
-        <label class="check"><input type="checkbox" data-key="warnUnresolved"> Show warnings</label>
+        <label class="check"><input type="checkbox" data-scope="global" data-key="autoRefreshOnInsert"> Refresh after each insert or edit</label>
+        <label class="check"><input type="checkbox" data-scope="global" data-key="suspendTrackChanges"> Suspend Track Changes during refresh</label>
+        <label class="check"><input type="checkbox" data-scope="global" data-key="warnUnresolved"> Show warnings</label>
         <p class="hint">Spaces at the start or end of text fields are kept.</p>
         <div id="cfgErrors" class="field-error" hidden></div>
       </form>

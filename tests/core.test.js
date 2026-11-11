@@ -10,7 +10,7 @@
     if (a === e) { pass++; }
     else { fail++; log('FAIL ' + name + '\n  expected ' + e + '\n  actual   ' + a); }
   }
-  function cfg(over) { return Object.assign({}, C.DEFAULT_CONFIG, over || {}); }
+  function cfg(over) { return Object.assign({}, C.DEFAULT_FORMAT, over || {}); }
 
   // §8.1 rendering examples
   var d = cfg();
@@ -55,10 +55,10 @@
   eq(C.validateLabel('droso', figs), 'Label "droso" is already used', 'dup label');
   eq(C.validateLabel('droso', figs, 'aaaaaa'), null, 'rename self');
   eq(!!C.validateLabel('a b', figs), true, 'bad chars');
-  eq(C.validateConfig(cfg({ panelStart: 'B' }), 26).length, 1, 'panelStart pushes past Z');
-  eq(C.validateConfig(cfg({ panelStart: 'B' }), 25).length, 0, 'panelStart ok');
-  eq(C.validateConfig(cfg({ numberStart: -1 })).length, 1, 'negative start');
-  eq(C.mergeConfig({ panelStyle: 'arabic' }).panelStart, '1', 'merge fixes panelStart for arabic');
+  eq(C.validateFormat(cfg({ panelStart: 'B' }), 26).length, 1, 'panelStart pushes past Z');
+  eq(C.validateFormat(cfg({ panelStart: 'B' }), 25).length, 0, 'panelStart ok');
+  eq(C.validateFormat(cfg({ numberStart: -1 })).length, 1, 'negative start');
+  eq(C.mergeFormat({ panelStyle: 'arabic' }).panelStart, '1', 'merge fixes panelStart for arabic');
   eq(C.convertPanelStart('C', 'arabic'), '3', 'convert letter->num');
   eq(C.convertPanelStart('3', 'upper'), 'C', 'convert num->letter');
 
@@ -89,25 +89,78 @@
   eq(C.targetText(items[3], reg, r.numbers), 'Supplementary Figure 3.A–C', 'target fig3.A–C');
   eq(C.targetText(items[4], reg, r.numbers), 'Supplementary Figure ??', 'target orphan');
 
+  var supp = function () { return C.seriesById(reg, 'fig'); };
+
   // Manual mode
-  reg.config = cfg({ orderMode: 'manual' });
+  supp().format = cfg({ orderMode: 'manual' });
   var rm = C.computeNumbering(reg, items.slice(0, 4));
   eq(rm.numbers, { f1: 1, f2: 2, f3: 3, f4: 4 }, 'manual numbers');
   eq(rm.warnings.filter(function (w) { return w.type === 'order'; }).length, 1, 'manual order warning');
+  eq(rm.warnings.filter(function (w) { return w.type === 'order'; })[0].message,
+    'Supplementary Figure 2 is cited before Supplementary Figure 1', 'manual order message');
 
   // numberStart
-  reg.config = cfg({ numberStart: 4 });
+  supp().format = cfg({ numberStart: 4 });
   eq(C.computeNumbering(reg, items.slice(0, 1)).numbers.f2, 4, 'numberStart 4');
+  supp().format = cfg();
+
+  // Series: independent counters and formats
+  eq(reg.series.map(function (s) { return s.id; }), ['main', 'fig', 'ext', 'table'], 'default series');
+  reg.figures.push(
+    { id: 'm1', seq: 'main', label: 'overview', description: '', manualOrder: 4 },
+    { id: 'm2', seq: 'main', label: 'model', description: '', manualOrder: 5 },
+    { id: 't1', seq: 'table', label: 'primers', description: '', manualOrder: 6 }
+  );
+  var mixed = [
+    { kind: 'c', figId: 'm2', panels: [], flags: '', ref: 10 },
+    { kind: 'c', figId: 'f3', panels: [1], flags: '', ref: 11 },
+    { kind: 'c', figId: 't1', panels: [], flags: '', ref: 12 },
+    { kind: 'c', figId: 'm1', panels: [2], flags: '', ref: 13 },
+    { kind: 'l', figId: 'm1', panels: [], flags: '', ref: 14 },
+    { kind: 'l', figId: 'f3', panels: [], flags: '', ref: 15 }
+  ];
+  var rs = C.computeNumbering(reg, mixed);
+  eq([rs.numbers.m2, rs.numbers.m1, rs.numbers.f3, rs.numbers.t1], [1, 2, 1, 1], 'independent counters');
+  eq([rs.numbers.f1, rs.numbers.f2, rs.numbers.f4], [2, 3, 4], 'uncited supp numbered after cited');
+  eq(C.targetText(mixed[3], reg, rs.numbers), 'Figure 2.B', 'main citation');
+  eq(C.targetText(mixed[1], reg, rs.numbers), 'Supplementary Figure 1.A', 'supp citation');
+  eq(C.targetText(mixed[2], reg, rs.numbers), 'Supplementary Table 1', 'table citation');
+  eq(C.targetText(mixed[4], reg, rs.numbers), 'Figure 2.', 'main legend');
+  eq(rs.warnings.filter(function (w) { return w.type === 'legendOrder'; }).length, 0,
+    'legends of different series do not conflict');
+  eq(C.validateSeriesMeta({ id: 'x', name: 'main FIGURES', placeholder: 'Figure' }, reg.series).length, 2,
+    'series name and placeholder must be unique');
+  eq(C.validateSeriesMeta({ id: 'x', name: 'Figure S', placeholder: '9bad' }, reg.series).length, 1, 'bad placeholder word');
 
   // Placeholders
-  eq(C.parsePlaceholder('Figure_droso_A'), { label: 'droso', panel: 1 }, 'placeholder with panel');
-  eq(C.parsePlaceholder('Figure_qpcr'), { label: 'qpcr', panel: null }, 'placeholder no panel');
-  eq(C.parsePlaceholder('Figure_'), null, 'placeholder empty');
+  var S = reg.series;
+  eq(C.parsePlaceholder('Figure_droso_A', S), { seq: 'fig', label: 'droso', panel: 1 }, 'placeholder with panel');
+  eq(C.parsePlaceholder('Figure_qpcr', S), { seq: 'fig', label: 'qpcr', panel: null }, 'placeholder no panel');
+  eq(C.parsePlaceholder('MainFig_overview_B', S), { seq: 'main', label: 'overview', panel: 2 }, 'main placeholder');
+  eq(C.parsePlaceholder('SuppTable_primers', S), { seq: 'table', label: 'primers', panel: null }, 'table placeholder');
+  eq(C.parsePlaceholder('Figure_', S), null, 'placeholder empty');
+  eq(C.parsePlaceholder('Other_x', S), null, 'unknown placeholder word');
+  eq(C.placeholderPatterns(S)[2].pattern, '<Figure_[A-Za-z0-9]@_[A-Z]>', 'wildcard pattern');
 
   // Registry normalization
   var n = C.normalizeRegistry('{"figures":[{"id":"abc"},{"id":"abc"},{"id":"BAD!"}]}');
   eq(n.figures.length, 1, 'normalize dedups and drops bad ids');
+  eq(n.figures[0].seq, 'fig', 'figure without seq goes to supplementary');
   eq(C.normalizeRegistry('not json').figures, [], 'normalize bad json');
+
+  // Migration from schema 1 (flat config, no series)
+  var v1 = C.normalizeRegistry({ schema: 1, figures: [{ id: 'k3f9qa', seq: 'fig', label: 'droso', manualOrder: 0 }],
+    config: { prefix: 'Fig. S', numberPanelSeparator: '', appearance: 'Hidden', autoRefreshOnInsert: false } });
+  eq(v1.schema, 2, 'migrated schema');
+  eq(C.seriesById(v1, 'fig').format.prefix, 'Fig. S', 'v1 format kept on supplementary');
+  eq(C.seriesById(v1, 'main').format.prefix, 'Figure ', 'other series get defaults');
+  eq([v1.config.appearance, v1.config.autoRefreshOnInsert], ['Hidden', false], 'v1 global settings kept');
+  eq(v1.figures[0].seq, 'fig', 'v1 figure stays supplementary');
+  var v2 = C.normalizeRegistry(JSON.stringify(v1));
+  eq(v2.series.length, 4, 'schema 2 round trip');
+  var custom = C.normalizeRegistry({ series: [{ id: 'xs', name: 'Figure S', placeholder: 'FigS', format: { prefix: 'Figure S' } }],
+    figures: [{ id: 'aaa', seq: 'gone', label: 'a' }] });
+  eq([custom.series.length, custom.figures[0].seq], [1, 'xs'], 'custom series only; unknown seq falls back');
 
   log(pass + ' passed, ' + fail + ' failed');
   if (fail && typeof quit === 'function') quit(1);

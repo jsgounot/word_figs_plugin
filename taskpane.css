@@ -86,6 +86,12 @@ input[type=checkbox] { width: auto; min-height: 0; margin: 0 6px 0 0; }
 .figlist .warnicon { color: var(--warn); }
 .figlist .actions { display: flex; gap: 2px; }
 .figlist .editrow { grid-column: 1 / -1; display: grid; gap: 4px; }
+.figlist li.group {
+  display: block; cursor: default; padding: 8px 6px 2px;
+  font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .03em;
+}
+.figlist li.group:hover { background: none; }
+#cfgSeries { flex: 1; }
 
 .addform { display: grid; gap: 4px; margin-top: 6px; }
 .field { display: block; margin: 6px 0; }

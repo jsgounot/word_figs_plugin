@@ -1,8 +1,9 @@
 # SuppRef
 
-A Word add-in that inserts **auto-numbered supplementary figure citations**, the way a reference manager inserts references.
+A Word add-in that inserts **auto-numbered figure citations** (main, supplementary, extended data, tables…), the way a reference manager inserts references, written with Claude.
 
-- Insert citations such as *Supplementary Figure 3.A–C*. Each one remembers which figure and which panels it points to.
+- Insert citations such as *Figure 2.B* or *Supplementary Figure 3.A–C*. Each one remembers which figure and which panels it points to.
+- Each series (main figures, supplementary figures, and so on) is numbered on its own.
 - Press **Refresh** to renumber every citation, based on the order in which figures are first cited.
 - Move, add or delete text freely, then Refresh again.
 - When the manuscript is final, use **Unlink all** to turn every citation into plain text.
@@ -25,7 +26,9 @@ You don't need GitHub, a code editor or any technical setup. The add-in already 
 3. If there's no folder called `wef` there, create one (all lowercase).
 4. Copy `manifest.xml` into the `wef` folder.
 5. Quit Word completely (**Cmd+Q**) and open it again.
-6. Open any document. Click **Home → Supp. Figures**. If the button isn't there, use **Insert → Add-ins → My Add-ins → Developer Add-ins → SuppRef**.
+6. Open any document. Click **Home → Supp. Figures**, at the right end of the Home ribbon. If the button isn't there, click **Home → Add-ins**, then **More Add-ins**. Open the **My Add-ins** tab and choose **SuppRef** under *Developer Add-ins*. On older Word versions, the path is **Insert → Add-ins → My Add-ins**.
+
+   Don't use **Tools → Templates and Add-ins**. That menu is for `.dotm` templates (for example Zotero's), not for this kind of add-in.
 
 The SuppRef panel opens on the right. It works with every document you open, and each document keeps its own figure list.
 
@@ -86,13 +89,26 @@ Delete `manifest.xml` from the `wef` folder and restart Word.
 
 ## Using it
 
-1. **Add figures** in the panel. A figure has a short label (e.g. `droso`) and an optional description. You can rename a label at any time; citations follow automatically.
+1. **Add figures** in the panel. Choose a series, a short label (e.g. `droso`) and an optional description. Labels must be unique across all series. You can rename a figure or move it to another series at any time with ✎; citations follow automatically.
 2. Put the cursor where the citation belongs. Pick the figure and its panels, using the toggle buttons or by typing e.g. `A-C,E`, then press **Insert citation**.
 3. Tick **Number only** to insert just `3.A`. This is useful when you write the plural yourself: "Supplementary Figures 3.A and 5.B".
 4. To change a citation, click inside it. The form switches to **Update citation**. If the switch doesn't happen automatically, press **Load selection**.
 5. At the start of each legend, press **Insert legend label**. Legend labels follow the numbering but never affect it.
-6. **Import** converts plain-text placeholders such as `Figure_droso_A` and `Figure_qpcr` into citations. It also creates any figures that are missing.
-7. **Settings** controls the prefix, number and panel styles, separators, ranges and manual ordering. **Save as my defaults** stores your choices on this computer for new documents.
+6. **Import** converts plain-text placeholders into citations, and creates any figures that are missing. Each series has its own placeholder word (see the table below). For example, `Figure_droso_A` becomes a supplementary citation and `MainFig_overview` a main one.
+7. **Settings** controls each series separately: its name, placeholder word, prefix, legend prefix, number and panel styles, separators, ranges and ordering. Pick the series at the top of Settings. **Add** creates a new series and **Delete** removes an empty one. **Save as my defaults** stores all series and options on this computer for new documents.
+
+### Series
+
+New documents start with four series. You can rename, reformat or delete them, or add your own (for example *Figure S1* style, or *Source Data*).
+
+| Series | Citation | Placeholder |
+|---|---|---|
+| Main figures | Figure 1.A | `MainFig_label_A` |
+| Supplementary figures | Supplementary Figure 1.A | `Figure_label_A` |
+| Additional figures | Extended Data Figure 1.A | `ExtFig_label_A` |
+| Supplementary tables | Supplementary Table 1 | `SuppTable_label` |
+
+Each series is numbered from its own first number, by first citation or in manual order. Documents created before series existed open with their figures under *Supplementary figures*, with their formatting kept.
 
 ### Good to know
 
@@ -115,7 +131,9 @@ Before a release, test manually in Word for Mac:
 
 - insert, reorder and refresh citations;
 - check that a second refresh reports 0 changed;
-- change each setting;
+- change each setting, for more than one series;
+- mix main and supplementary citations, and check that each series counts from 1;
+- move a figure to another series, then add and delete a series;
 - refresh with Track Changes on;
 - check orphans and legend-order warnings;
 - save and reopen the document;
