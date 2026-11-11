@@ -201,7 +201,7 @@
    */
   async function scanControls(ctx) {
     var ccs = ctx.document.body.contentControls;
-    ccs.load('items/id,items/tag,items/text,items/title,items/appearance,items/cannotEdit,items/cannotDelete');
+    ccs.load('items/id,items/tag,items/text,items/title,items/appearance,items/cannotEdit,items/cannotDelete,items/font/bold');
     await ctx.sync();
     var mine = ccs.items.filter(function (cc) { return isMine(cc.tag); });
     mine = await ensureDocumentOrder(ctx, mine);
@@ -259,6 +259,7 @@
   function styleControl(cc, kind, figId) {
     cc.title = titleFor(kind, figId);
     cc.appearance = cfg().appearance;
+    cc.font.bold = fmtFor(figId).bold;
     cc.cannotDelete = false;
     cc.cannotEdit = true;
   }
@@ -277,21 +278,26 @@
         warnings.push({ type: 'malformed', ref: m.cc.id, message: 'Malformed SuppRef control (' + m.error + '), left untouched' });
       });
 
-      var changes = [], textChanged = 0, citations = 0;
+      var changes = [], textChanged = 0, boldChanged = 0, citations = 0;
       state.maxUsedPanel = maxPanelsBySeries(scan.items);
       scan.items.forEach(function (it) {
         if (it.kind === 'c') citations++;
         var target = C.targetText(it, reg, res.numbers);
         var title = titleFor(it.kind, it.figId);
         var t = it.cc.text !== target;
+        var bold = fmtFor(it.figId).bold;
+        // font.bold is null when the control mixes bold and regular text.
+        var b = it.cc.font.bold !== bold;
         if (t) textChanged++;
-        if (t || it.cc.title !== title || it.cc.appearance !== config.appearance || it.cc.cannotEdit !== true) {
-          changes.push({ cc: it.cc, target: target, title: title, text: t });
+        if (b) boldChanged++;
+        if (t || b || it.cc.title !== title || it.cc.appearance !== config.appearance || it.cc.cannotEdit !== true) {
+          changes.push({ cc: it.cc, target: target, title: title, text: t, bold: b ? bold : null });
         }
       });
 
       var restoreMode = null;
-      if (textChanged && config.suspendTrackChanges) {
+      // Bold changes are formatting revisions, so they also need Track Changes suspended.
+      if ((textChanged || boldChanged) && config.suspendTrackChanges) {
         if (state.api14) {
           ctx.document.load('changeTrackingMode');
           await ctx.sync();
@@ -308,10 +314,9 @@
       try {
         for (var i = 0; i < changes.length; i++) {
           var c = changes[i];
-          if (c.text) {
-            c.cc.cannotEdit = false;
-            c.cc.insertText(c.target, 'Replace');
-          }
+          if (c.text || c.bold !== null) c.cc.cannotEdit = false;
+          if (c.text) c.cc.insertText(c.target, 'Replace');
+          if (c.bold !== null) c.cc.font.bold = c.bold;
           c.cc.cannotEdit = true;
           if (c.cc.title !== c.title) c.cc.title = c.title;
           if (c.cc.appearance !== config.appearance) c.cc.appearance = config.appearance;
@@ -705,7 +710,10 @@
     d.series.forEach(function (x) { sel.appendChild(el('option', { value: x.id, text: x.name.trim() || '(unnamed)' })); });
     sel.value = d.current;
     formInputs('series').forEach(function (input) { input.value = s[input.dataset.key] || ''; });
-    formInputs('format').forEach(function (input) { input.value = s.format[input.dataset.key]; });
+    formInputs('format').forEach(function (input) {
+      if (input.type === 'checkbox') input.checked = !!s.format[input.dataset.key];
+      else input.value = s.format[input.dataset.key];
+    });
     formInputs('global').forEach(function (input) {
       if (input.type === 'checkbox') input.checked = !!d.config[input.dataset.key];
       else input.value = d.config[input.dataset.key];
@@ -720,7 +728,8 @@
     });
     formInputs('format').forEach(function (input) {
       var k = input.dataset.key;
-      if (CFG_INT[k]) s.format[k] = /^\s*-?\d+\s*$/.test(input.value) ? parseInt(input.value, 10) : NaN;
+      if (input.type === 'checkbox') s.format[k] = input.checked;
+      else if (CFG_INT[k]) s.format[k] = /^\s*-?\d+\s*$/.test(input.value) ? parseInt(input.value, 10) : NaN;
       else s.format[k] = input.value;
     });
     formInputs('global').forEach(function (input) {
@@ -754,6 +763,7 @@
     if (opt) opt.textContent = s.name.trim() || '(unnamed)';
 
     var ownFormatErrs = C.validateFormat(s.format, state.maxUsedPanel[s.id]);
+    $('cfgPreview').style.fontWeight = s.format.bold === true ? '700' : '400';
     $('cfgPreview').textContent = ownFormatErrs.length ? '—' :
       C.renderCitation(3, [1, 2, 3], '', s.format) + '   ·   ' + C.renderLegend(3, s.format);
 
@@ -1014,6 +1024,7 @@
     // Preview
     var fid = sel.value;
     var flags = $('numberOnly').checked ? 'n' : '';
+    $('insPreview').style.fontWeight = c.bold ? '700' : '400';
     $('insPreview').textContent = !fid ? '' :
       (editing && editing.kind === 'l') ? C.renderLegend(lastNumber(fid), c) :
         C.renderCitation(lastNumber(fid), state.panels, flags, c);

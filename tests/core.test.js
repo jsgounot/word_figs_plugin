@@ -59,6 +59,9 @@
   eq(C.validateFormat(cfg({ panelStart: 'B' }), 25).length, 0, 'panelStart ok');
   eq(C.validateFormat(cfg({ numberStart: -1 })).length, 1, 'negative start');
   eq(C.mergeFormat({ panelStyle: 'arabic' }).panelStart, '1', 'merge fixes panelStart for arabic');
+  eq(C.mergeFormat({}).bold, true, 'bold on by default');
+  eq(C.mergeFormat({ bold: false }).bold, false, 'bold off kept');
+  eq(C.validateFormat(cfg({ bold: 'yes' })).length, 1, 'bold must be boolean');
   eq(C.convertPanelStart('C', 'arabic'), '3', 'convert letter->num');
   eq(C.convertPanelStart('3', 'upper'), 'C', 'convert num->letter');
 

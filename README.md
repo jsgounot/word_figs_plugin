@@ -96,7 +96,7 @@ Delete `manifest.xml` from the `wef` folder and restart Word.
 4. To change a citation, click inside it. The form switches to **Update citation**. If the switch doesn't happen automatically, press **Load selection**.
 5. At the start of each legend, press **Insert legend label**. Legend labels follow the numbering but never affect it.
 6. **Import** converts plain-text placeholders into citations, and creates any figures that are missing. Each series has its own placeholder word (see the table below). For example, `Figure_droso_A` becomes a supplementary citation and `MainFig_overview` a main one.
-7. **Settings** controls each series separately: its name, placeholder word, prefix, legend prefix, number and panel styles, separators, ranges and ordering. Pick the series at the top of Settings. **Add** creates a new series and **Delete** removes an empty one. **Save as my defaults** stores all series and options on this computer for new documents.
+7. **Settings** controls each series separately: its name, placeholder word, prefix, legend prefix, number and panel styles, separators, ranges, ordering, and whether its citations are **bold** (on by default). Pick the series at the top of Settings. **Add** creates a new series and **Delete** removes an empty one. **Save as my defaults** stores all series and options on this computer for new documents.
 
 ### Series
 

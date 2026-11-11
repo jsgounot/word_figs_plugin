@@ -11,7 +11,7 @@
 (function (root) {
   'use strict';
 
-  var VERSION = '1.1.0';  // add-in version shown in Settings; bump on each release
+  var VERSION = '1.2.0';  // add-in version shown in Settings; bump on each release
   var TAG_SCHEMA = 1;     // version inside content-control tags (unchanged by series)
   var SCHEMA = 2;         // version of the registry stored in document settings
   var SETTINGS_KEY = 'suppref';
@@ -31,7 +31,8 @@
     panelRangeSeparator: '–',
     panelListSeparator: ',',
     panelRangeMinRun: 3,
-    orderMode: 'firstCitation'
+    orderMode: 'firstCitation',
+    bold: true              // citations and legend labels of the series are bold
   });
 
   /** Document-wide behaviour. */
@@ -417,6 +418,7 @@
     });
     if (!isInt(fmt.numberStart) || fmt.numberStart < 0) err('numberStart', 'Must be a whole number ≥ 0');
     if (!isInt(fmt.panelRangeMinRun) || fmt.panelRangeMinRun < 2) err('panelRangeMinRun', 'Must be a whole number ≥ 2');
+    if (typeof fmt.bold !== 'boolean') err('bold', 'Must be on or off');
     ['numberStyle', 'panelStyle', 'orderMode'].forEach(function (k) {
       if (ENUMS[k].indexOf(fmt[k]) < 0) err(k, 'Invalid value');
     });
