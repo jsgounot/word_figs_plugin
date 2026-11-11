@@ -783,6 +783,8 @@
     updateSettingsPreview();
     $('mainView').hidden = true;
     $('settingsView').hidden = false;
+    $('btnSettings').classList.add('active');
+    $('btnSettings').textContent = 'Close settings';
   }
 
   function switchDraftSeries(id) {
@@ -824,6 +826,8 @@
     state.draft = null;
     $('settingsView').hidden = true;
     $('mainView').hidden = false;
+    $('btnSettings').classList.remove('active');
+    $('btnSettings').textContent = 'Settings';
     var fid = $('insFigure').value;
     $('panelText').value = C.formatPanelText(state.panels, fmtFor(fid));
     $('panelError').hidden = true;
@@ -1040,7 +1044,14 @@
 
   function bindEvents() {
     $('btnRefresh').addEventListener('click', function () { action(doRefresh); });
-    $('btnSettings').addEventListener('click', openSettings);
+    $('btnSettings').addEventListener('click', function () {
+      if (state.draft) closeSettings(); else openSettings();
+    });
+    $('version').textContent = 'v' + C.VERSION;
+    $('cfgBackTop').addEventListener('click', closeSettings);
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && state.draft && !state.busy) closeSettings();
+    });
     $('btnImport').addEventListener('click', function () { action(doImport); });
     $('btnUnlink').addEventListener('click', function () { action(doUnlinkAll); });
 

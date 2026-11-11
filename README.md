@@ -81,6 +81,7 @@ For Word on the web, upload the same manifest under **Insert → Add-ins → Upl
   - `~/Library/Containers/com.microsoft.Word/Data/Library/Application Support/Microsoft/Office/16.0/Wef/`
 
   Check these paths against Microsoft's "Clear the Office cache" page; they can change between Office versions.
+- Bump `VERSION` at the top of `core.js` for each release. It appears next to the Settings title, so you can confirm Word loaded the new code.
 - Bump `<Version>` in the manifest only when the manifest itself changes, then copy it into `wef/` again.
 
 ## Uninstall

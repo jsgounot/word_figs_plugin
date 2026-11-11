@@ -92,6 +92,9 @@ input[type=checkbox] { width: auto; min-height: 0; margin: 0 6px 0 0; }
 }
 .figlist li.group:hover { background: none; }
 #cfgSeries { flex: 1; }
+.settings-head { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.settings-head h2 { margin: 0; flex: 1; }
+.toolbar button.active { border-color: var(--accent); color: var(--accent); }
 
 .addform { display: grid; gap: 4px; margin-top: 6px; }
 .field { display: block; margin: 6px 0; }

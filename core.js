@@ -11,6 +11,7 @@
 (function (root) {
   'use strict';
 
+  var VERSION = '1.1.0';  // add-in version shown in Settings; bump on each release
   var TAG_SCHEMA = 1;     // version inside content-control tags (unchanged by series)
   var SCHEMA = 2;         // version of the registry stored in document settings
   var SETTINGS_KEY = 'suppref';
@@ -694,6 +695,7 @@
   }
 
   var api = {
+    VERSION: VERSION,
     SCHEMA: SCHEMA,
     TAG_SCHEMA: TAG_SCHEMA,
     SETTINGS_KEY: SETTINGS_KEY,

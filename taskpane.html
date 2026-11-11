@@ -68,7 +68,11 @@
   <!-- Settings view (replaces sections 2–3) -->
   <main id="settingsView" hidden>
     <section>
-      <h2>Settings</h2>
+      <div class="settings-head">
+        <button type="button" id="cfgBackTop" title="Back to the main panel without saving (Esc)">← Back</button>
+        <h2>Settings</h2>
+        <span id="version" class="hint"></span>
+      </div>
       <form id="cfgForm" class="cfg" autocomplete="off">
         <h3>Series</h3>
         <p class="hint">Each series (main figures, supplementary figures, tables…) is numbered independently.</p>
