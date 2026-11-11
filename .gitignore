@@ -1,0 +1,10 @@
+# Private design notes, not published
+forclaude.md
+
+# macOS
+.DS_Store
+
+# Editors
+.vscode/
+.idea/
+*.swp

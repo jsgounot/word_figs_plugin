@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SuppRef</title>
+  <link rel="stylesheet" href="taskpane.css">
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <script src="core.js"></script>
+  <script src="taskpane.js" defer></script>
+</head>
+<body>
+  <div id="spinner" class="spinner" hidden aria-label="Working"></div>
+
+  <!-- 1. Toolbar -->
+  <header class="toolbar">
+    <button id="btnRefresh" class="primary" title="Renumber every citation">Refresh</button>
+    <button id="btnSettings" title="Formatting and numbering options">Settings</button>
+    <button id="btnImport" title="Convert Figure_label_A placeholders into citations">Import</button>
+    <button id="btnUnlink" class="danger" title="Convert all citations to plain text">Unlink all</button>
+  </header>
+
+  <div id="message" class="message" hidden></div>
+  <div id="confirm" class="confirm" hidden>
+    <p id="confirmText"></p>
+    <div class="row">
+      <button id="confirmOk" class="danger"></button>
+      <button id="confirmCancel">Cancel</button>
+    </div>
+  </div>
+
+  <main id="mainView">
+    <!-- 2. Figures -->
+    <section>
+      <h2>Figures</h2>
+      <ul id="figList" class="figlist"></ul>
+      <p id="figEmpty" class="hint">No figures yet. Add one below, or import placeholders.</p>
+      <form id="addForm" class="addform" autocomplete="off">
+        <input id="addLabel" placeholder="Label (e.g. droso)" maxlength="30" required>
+        <input id="addDesc" placeholder="Description (optional)" maxlength="200">
+        <button type="submit">Add figure</button>
+      </form>
+    </section>
+
+    <!-- 3. Insert -->
+    <section>
+      <h2 id="insertHeading">Insert</h2>
+      <label class="field">Figure
+        <select id="insFigure"></select>
+      </label>
+      <div class="field">Panels
+        <div id="panelToggles" class="toggles"></div>
+        <input id="panelText" placeholder="e.g. A-C,E (empty = whole figure)">
+        <div id="panelError" class="field-error" hidden></div>
+      </div>
+      <label class="check"><input type="checkbox" id="numberOnly"> Number only (no prefix)</label>
+      <div class="preview" id="insPreview"></div>
+      <div class="row wrap">
+        <button id="btnInsert" class="primary">Insert citation</button>
+        <button id="btnLegend">Insert legend label</button>
+        <button id="btnLoadSel" title="Edit the citation at the cursor">Load selection</button>
+        <button id="btnCancelEdit" hidden>Cancel edit</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- Settings view (replaces sections 2–3) -->
+  <main id="settingsView" hidden>
+    <section>
+      <h2>Settings</h2>
+      <div class="preview" id="cfgPreview"></div>
+      <form id="cfgForm" class="cfg" autocomplete="off">
+        <h3>Citations</h3>
+        <label>Prefix <input data-key="prefix"></label>
+        <label>Number style
+          <select data-key="numberStyle">
+            <option value="arabic">1, 2, 3</option>
+            <option value="roman-upper">I, II, III</option>
+            <option value="roman-lower">i, ii, iii</option>
+          </select>
+        </label>
+        <label>First number <input data-key="numberStart" type="number" min="0" step="1"></label>
+        <label>Number–panel separator <input data-key="numberPanelSeparator"></label>
+
+        <h3>Panels</h3>
+        <label>Panel style
+          <select data-key="panelStyle">
+            <option value="upper">A, B, C</option>
+            <option value="lower">a, b, c</option>
+            <option value="arabic">1, 2, 3</option>
+            <option value="roman-lower">i, ii, iii</option>
+          </select>
+        </label>
+        <label>First panel <input data-key="panelStart"></label>
+        <div class="hint" id="panelsAvailable"></div>
+        <label>Range separator <input data-key="panelRangeSeparator"></label>
+        <label>List separator <input data-key="panelListSeparator"></label>
+        <label>Shortest run written as a range <input data-key="panelRangeMinRun" type="number" min="2" step="1"></label>
+
+        <h3>Legend labels</h3>
+        <label>Legend prefix <input data-key="legendPrefix"></label>
+        <label>Legend suffix <input data-key="legendSuffix"></label>
+
+        <h3>Behaviour</h3>
+        <label>Numbering
+          <select data-key="orderMode">
+            <option value="firstCitation">By first citation</option>
+            <option value="manual">Manual order</option>
+          </select>
+        </label>
+        <label>Control appearance
+          <select data-key="appearance">
+            <option value="BoundingBox">Bounding box</option>
+            <option value="Hidden">Hidden</option>
+          </select>
+        </label>
+        <label class="check"><input type="checkbox" data-key="autoRefreshOnInsert"> Refresh after each insert or edit</label>
+        <label class="check"><input type="checkbox" data-key="suspendTrackChanges"> Suspend Track Changes during refresh</label>
+        <label class="check"><input type="checkbox" data-key="warnUnresolved"> Show warnings</label>
+        <p class="hint">Spaces at the start or end of text fields are kept.</p>
+        <div id="cfgErrors" class="field-error" hidden></div>
+      </form>
+      <div class="row wrap">
+        <button id="cfgSave" class="primary">Save</button>
+        <button id="cfgDefaults">Save as my defaults</button>
+        <button id="cfgBack">Back</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- 4. Status -->
+  <footer class="status">
+    <div id="lastRefresh" class="hint"></div>
+    <div id="summary"></div>
+    <details id="warnBox" hidden>
+      <summary>Warnings (<span id="warnCount">0</span>)</summary>
+      <ul id="warnList" class="warnlist"></ul>
+      <button id="btnRegisterOrphans" hidden>Register orphans</button>
+    </details>
+  </footer>
+</body>
+</html>
